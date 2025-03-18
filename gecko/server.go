@@ -1,4 +1,4 @@
-package chameleon
+package gecko
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/kataras/iris"
+	"github.com/kataras/iris/v12"
 	"github.com/uc-cdis/arborist/arborist"
 )
 
@@ -49,29 +49,61 @@ func (server *Server) WithDB(db *sqlx.DB) *Server {
 
 func (server *Server) Init() (*Server, error) {
 	if server.db == nil {
-		return nil, errors.New("chameleon server initialized without database")
+		return nil, errors.New("gecko server initialized without database")
 	}
 	if server.jwtApp == nil {
-		return nil, errors.New("chameleon server initialized without JWT app")
+		return nil, errors.New("gecko server initialized without JWT app")
 	}
 	if server.logger == nil {
-		return nil, errors.New("chameleon server initialized without logger")
+		return nil, errors.New("gecko server initialized without logger")
 	}
-
+	server.logger.logger.Printf("DB: %#v, JWTApp: %#v, Logger: %#v", server.db, server.jwtApp, server.logger)
 	return server, nil
 }
 
 func (server *Server) MakeRouter() *iris.Application {
 	router := iris.New()
+	if router == nil {
+		log.Fatal("Failed to initialize router")
+	}
+	router.Use(recoveryMiddleware)
+	router.Get("/", func(ctx iris.Context) {
+		server.logger.logger.Println("Root handler called")
+		ctx.JSON(iris.Map{"message": "Hello, World!"})
+	})
+	router.OnErrorCode(iris.StatusNotFound, handleNotFound)
 	router.Get("/health", server.handleHealth)
 	router.Get("/config/{configId}", server.handleConfigGET)
 	router.Put("/config/{configId}", server.handleConfigPUT)
-	router.OnErrorCode(iris.StatusNotFound, handleNotFound)
+	// Optionally keep UseRouter if needed, with safety checks
 	router.UseRouter(func(ctx iris.Context) {
-		ctx.Request().URL.Path = strings.TrimSuffix(ctx.Request().URL.Path, "/")
+		req := ctx.Request()
+		if req == nil || req.URL == nil {
+			log.Println("WARNING: Request or URL is nil")
+			ctx.StatusCode(http.StatusInternalServerError)
+			ctx.WriteString("Internal Server Error")
+			return
+		}
+		log.Println("REQUEST:", req)
+		req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 		ctx.Next()
 	})
+	// Build the router to ensure it's ready for net/http
+	if err := router.Build(); err != nil {
+		log.Fatalf("Failed to build Iris router: %v", err)
+	}
 	return router
+}
+
+func recoveryMiddleware(ctx iris.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			ctx.Application().Logger().Errorf("panic recovered: %v", r)
+			ctx.StatusCode(iris.StatusInternalServerError)
+			ctx.WriteString("Internal Server Error")
+		}
+	}()
+	ctx.Next()
 }
 
 func (server *Server) handleConfigGET(ctx iris.Context) {
@@ -98,14 +130,22 @@ func (server *Server) handleConfigGET(ctx iris.Context) {
 func (server *Server) handleConfigPUT(ctx iris.Context) {
 	configId := ctx.Params().Get("configId")
 	data := map[string]any{}
-	body := ctx.Recorder().Body()
-	errResponse := unmarshal(body, data)
+	body, err := ctx.GetBody()
+	if err != nil {
+		msg := fmt.Sprintf("client query failed: %s", err.Error())
+		errResponse := newErrorResponse(msg, 500, nil)
+		errResponse.log.write(server.logger)
+		_ = errResponse.write(ctx)
+		return
+
+	}
+	errResponse := unmarshal(body, &data)
 	if errResponse != nil {
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
 	}
-	err := configPUT(server.db, configId, data)
+	err = configPUT(server.db, configId, data)
 	if err != nil {
 		msg := fmt.Sprintf("client query failed: %s", err.Error())
 		errResponse := newErrorResponse(msg, 500, nil)
@@ -114,21 +154,24 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 		return
 	}
 
-	//_ = jsonResponseFrom(policy, http.StatusOK).write(w, r)
+	_ = jsonResponseFrom(fmt.Sprintf("OK: %s", configId), http.StatusOK).write(ctx)
 }
 
 func (server *Server) handleHealth(ctx iris.Context) {
+	server.logger.logger.Println("Entering handleHealth")
 	err := server.db.Ping()
 	if err != nil {
-		server.logger.Error("database ping failed; returning unhealthy")
+		server.logger.logger.Printf("Database ping failed: %v", err)
 		response := newErrorResponse("database unavailable", 500, nil)
 		_ = response.write(ctx)
 		return
 	}
+	server.logger.logger.Println("Health check passed")
 	_ = jsonResponseFrom("Healthy", http.StatusOK).write(ctx)
 }
 
 func handleNotFound(ctx iris.Context) {
+	log.Println("HELLO ? ")
 	response := struct {
 		Error struct {
 			Message string `json:"message"`
@@ -146,19 +189,23 @@ func handleNotFound(ctx iris.Context) {
 	_ = jsonResponseFrom(response, 404).write(ctx)
 }
 
-func unmarshal(body []byte, x interface{}) *ErrorResponse {
-	var structValue reflect.Value = reflect.ValueOf(x)
-	if structValue.Kind() == reflect.Ptr {
-		structValue = structValue.Elem()
+func unmarshal(body []byte, x any) *ErrorResponse {
+	if len(body) == 0 {
+		return newErrorResponse("empty request body", http.StatusBadRequest, nil)
 	}
-	var structType reflect.Type = structValue.Type()
+
 	err := json.Unmarshal(body, x)
 	if err != nil {
+		structType := reflect.TypeOf(x)
+		if structType.Kind() == reflect.Ptr {
+			structType = structType.Elem()
+		}
+
 		msg := fmt.Sprintf(
 			"could not parse %s from JSON; make sure input has correct types",
 			structType,
 		)
-		response := newErrorResponse(msg, 400, &err)
+		response := newErrorResponse(msg, http.StatusBadRequest, &err)
 		response.log.Info(
 			"tried to create %s but input was invalid; offending JSON: %s",
 			structType,

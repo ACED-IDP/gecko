@@ -1,8 +1,7 @@
-package chameleon
+package gecko
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -14,37 +13,28 @@ type Document struct {
 }
 
 func configGET(db *sqlx.DB, name string) (any, error) {
-	stmt := "SELECT id, name, content FROM documents WHERE name=$1"
+	stmt := "SELECT name, content FROM documents WHERE name=$1"
 	doc := &Document{}
-	err := db.Select(&doc, stmt, name)
+	err := db.Get(doc, stmt, name)
 	if err != nil {
 		return nil, err
 	}
 
-	// optionally print the value for the user
 	var content map[string]any
 	err = json.Unmarshal(doc.Content, &content)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("VALUE OF DOC: ", content)
-
 	return content, nil
 }
 
-/*
-init db
-CREATE TABLE documents (
-
-	id SERIAL PRIMARY KEY,
-	name TEXT,
-	content JSONB
-
-);
-*/
-
 func configPUT(db *sqlx.DB, name string, data map[string]any) error {
-	stmt := "INSERT INTO documents (name, content) VALUES ($1, $2)"
+	stmt := `
+                INSERT INTO documents (name, content)
+                VALUES ($1, $2)
+                ON CONFLICT (name)
+                DO UPDATE SET content = $2;
+        `
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err

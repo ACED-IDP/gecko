@@ -1,10 +1,10 @@
-package chameleon
+package gecko
 
 import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kataras/iris"
+	"github.com/kataras/iris/v12"
 	"github.com/uc-cdis/arborist/arborist"
 )
 
