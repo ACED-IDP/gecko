@@ -9,6 +9,8 @@ ENV PATH="/go/bin:${PATH}"
 
 WORKDIR $GOPATH/src/github.com/ACED-IDP/gecko/
 
+
+
 COPY go.mod .
 COPY go.sum .
 
@@ -22,4 +24,3 @@ RUN GITCOMMIT=$(git rev-parse HEAD) \
     -ldflags="-X 'github.com/ACED-IDP/gecko/gecko/version.GitCommit=${GITCOMMIT}' -X 'github.com/ACED-IDP/gecko/gecko/version.GitVersion=${GITVERSION}'" \
     -o bin/gecko
 
-CMD ["bin/gecko"]

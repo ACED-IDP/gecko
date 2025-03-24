@@ -28,9 +28,22 @@ func main() {
 		print("WARNING: no $JWKS_ENDPOINT or --jwks specified; endpoints requiring JWT validation will error\n")
 	}
 
-	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
-		"postgres", "your_strong_password", "testdb", "localhost", "5432")
-	db, err := sqlx.Connect("postgres", connStr)
+	//connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
+	//	"postgres", "your_strong_password", "testdb", "localhost", "5432")
+	//db, err := sqlx.Connect("postgres", connStr)
+
+
+	var dbUrl *string = flag.String(
+		"db",
+		"",
+		"URL to connect to database: postgresql://user:password@netloc:port/dbname\n"+
+			"can also be specified through the postgres\n"+
+			"environment variables. If using the commandline argument, add\n"+
+			"?sslmode=disable",
+	)
+
+
+	db, err := sqlx.Open("postgres", *dbUrl)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 		panic(err)
