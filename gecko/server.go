@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/ACED-IDP/gecko/gecko/config"
 	"github.com/jmoiron/sqlx"
 	"github.com/kataras/iris/v12"
 	"github.com/uc-cdis/arborist/arborist"
@@ -75,6 +76,8 @@ func (server *Server) MakeRouter() *iris.Application {
 	router.Get("/health", server.handleHealth)
 	router.Get("/config/{configId}", server.handleConfigGET)
 	router.Put("/config/{configId}", server.handleConfigPUT)
+	router.Delete("/config/{configId}", server.handleConfigDELETE)
+
 	// Optionally keep UseRouter if needed, with safety checks
 	router.UseRouter(func(ctx iris.Context) {
 		req := ctx.Request()
@@ -84,7 +87,6 @@ func (server *Server) MakeRouter() *iris.Application {
 			ctx.WriteString("Internal Server Error")
 			return
 		}
-		log.Println("REQUEST:", req)
 		req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 		ctx.Next()
 	})
@@ -109,27 +111,50 @@ func recoveryMiddleware(ctx iris.Context) {
 func (server *Server) handleConfigGET(ctx iris.Context) {
 	configId := ctx.Params().Get("configId")
 	doc, err := configGET(server.db, configId)
-	if doc == nil {
-		msg := fmt.Sprintf("no client found with clientID: %s", configId)
+	if doc == nil && err == nil {
+		msg := fmt.Sprintf("no configId found with configId: %s", configId)
 		errResponse := newErrorResponse(msg, 404, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
 	}
 	if err != nil {
-		msg := fmt.Sprintf("client query failed: %s", err.Error())
+		msg := fmt.Sprintf("config query failed: %s", err.Error())
+		errResponse := newErrorResponse(msg, 500, nil)
+		errResponse.log.write(server.logger)
+		_ = errResponse.write(ctx)
+		return
+	}
+	server.logger.logger.Println(doc)
+	_ = jsonResponseFrom(doc, http.StatusOK).write(ctx)
+}
+
+func (server *Server) handleConfigDELETE(ctx iris.Context) {
+	configId := ctx.Params().Get("configId")
+	doc, err := configDELETE(server.db, configId)
+	if doc == false && err == nil {
+		msg := fmt.Sprintf("no configId found with configId: %s", configId)
+		errResponse := newErrorResponse(msg, 404, nil)
+		errResponse.log.write(server.logger)
+		_ = errResponse.write(ctx)
+		return
+	}
+	if err != nil {
+		msg := fmt.Sprintf("config query failed: %s", err.Error())
 		errResponse := newErrorResponse(msg, 500, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
 	}
 
-	_ = jsonResponseFrom(doc, http.StatusOK).write(ctx)
+	okmsg := map[string]any{"code": 200, "message": fmt.Sprintf("DELETED: %s", configId)}
+	server.logger.logger.Println(okmsg)
+	_ = jsonResponseFrom(okmsg, http.StatusOK).write(ctx)
 }
 
 func (server *Server) handleConfigPUT(ctx iris.Context) {
 	configId := ctx.Params().Get("configId")
-	data := map[string]any{}
+	data := []config.ConfigItem{}
 	body, err := ctx.GetBody()
 	if err != nil {
 		msg := fmt.Sprintf("client query failed: %s", err.Error())
@@ -141,6 +166,7 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 	}
 	errResponse := unmarshal(body, &data)
 	if errResponse != nil {
+		fmt.Printf("HELLO DATA: ERR: %#v\n", errResponse)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
@@ -154,7 +180,9 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 		return
 	}
 
-	_ = jsonResponseFrom(fmt.Sprintf("OK: %s", configId), http.StatusOK).write(ctx)
+	okmsg := map[string]any{"code": 200, "message": fmt.Sprintf("ACCEPTED: %s", configId)}
+	server.logger.logger.Println(okmsg)
+	_ = jsonResponseFrom(okmsg, http.StatusOK).write(ctx)
 }
 
 func (server *Server) handleHealth(ctx iris.Context) {
@@ -171,7 +199,6 @@ func (server *Server) handleHealth(ctx iris.Context) {
 }
 
 func handleNotFound(ctx iris.Context) {
-	log.Println("HELLO ? ")
 	response := struct {
 		Error struct {
 			Message string `json:"message"`

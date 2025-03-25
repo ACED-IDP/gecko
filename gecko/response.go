@@ -9,7 +9,7 @@ import (
 )
 
 type jsonResponse struct {
-	content interface{}
+	content any
 	code    int
 }
 
@@ -23,7 +23,7 @@ type ErrorResponse struct {
 	log LogCache
 }
 
-func jsonResponseFrom(content interface{}, code int) *jsonResponse {
+func jsonResponseFrom(content any, code int) *jsonResponse {
 	return &jsonResponse{
 		content: content,
 		code:    code,

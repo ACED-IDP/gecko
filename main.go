@@ -22,16 +22,10 @@ func main() {
 		jwkEndpointEnv,
 		"endpoint from which the application can fetch a JWKS",
 	)
-	flag.Parse()
 
 	if *jwkEndpoint == "" {
 		print("WARNING: no $JWKS_ENDPOINT or --jwks specified; endpoints requiring JWT validation will error\n")
 	}
-
-	//connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
-	//	"postgres", "your_strong_password", "testdb", "localhost", "5432")
-	//db, err := sqlx.Connect("postgres", connStr)
-
 
 	var dbUrl *string = flag.String(
 		"db",
@@ -41,7 +35,7 @@ func main() {
 			"environment variables. If using the commandline argument, add\n"+
 			"?sslmode=disable",
 	)
-
+	flag.Parse()
 
 	db, err := sqlx.Open("postgres", *dbUrl)
 	if err != nil {
