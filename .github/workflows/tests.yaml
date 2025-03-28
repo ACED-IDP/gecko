@@ -49,14 +49,7 @@ jobs:
       env:
         PGPASSWORD: your_strong_password
 
-    # Run your application (if needed before tests)
     - name: Start Application
-      run: ./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:8081/testdb?sslmode=disable" -port 8080 &
-      env:
-        DB_CONNECTION: "postgresql://postgres:your_strong_password@localhost:8081/testdb?sslmode=disable"
-
-    # Run tests
-    - name: Run Tests
-      run: go test -v ./...
-      env:
-        DB_CONNECTION: "postgresql://postgres:your_strong_password@localhost:8081/testdb?sslmode=disable"
+      run: |
+        ./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:8081/testdb?sslmode=disable" -port 8080 &
+        go test -v ./...
