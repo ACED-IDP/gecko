@@ -51,5 +51,6 @@ jobs:
 
     - name: Start Application
       run: |
+        make
         ./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:8081/testdb?sslmode=disable" -port 8080 &
         go test -v ./...
