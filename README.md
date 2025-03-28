@@ -19,6 +19,6 @@ Make sure the below command matches whatever was specified in the init db script
 ```
 ./init_postgres.sh
 go build -o bin/gecko
-./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:5432/testdb?sslmode=disable"
+./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:5432/testdb?sslmode=disable" -port 8080
 go test -v ./...
 ```
