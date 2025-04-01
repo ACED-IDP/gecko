@@ -9,11 +9,8 @@ ENV PATH="/go/bin:${PATH}"
 
 WORKDIR $GOPATH/src/github.com/ACED-IDP/gecko/
 
-
-
 COPY go.mod .
 COPY go.sum .
-
 RUN go mod download
 
 COPY . .

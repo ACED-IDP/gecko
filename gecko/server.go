@@ -162,15 +162,15 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 	}
 	if !json.Valid(body) {
 		msg := "Invalid JSON format"
-		errResponse := newErrorResponse(msg, 400, nil) // 400 Bad Request
+		errResponse := newErrorResponse(msg, 400, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
 	}
 	errResponse := unmarshal(body, &data)
 	if errResponse != nil {
-		msg := fmt.Sprintf("body data unmarshal failed: %s", err.Error())
-		errResponse := newErrorResponse(msg, 500, nil)
+		msg := fmt.Sprintf("body data unmarshal failed: %s", errResponse.err)
+		errResponse := newErrorResponse(msg, 400, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
@@ -224,7 +224,6 @@ func unmarshal(body []byte, x any) *ErrorResponse {
 	if len(body) == 0 {
 		return newErrorResponse("empty request body", http.StatusBadRequest, nil)
 	}
-
 	err := json.Unmarshal(body, x)
 	if err != nil {
 		structType := reflect.TypeOf(x)

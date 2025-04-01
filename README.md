@@ -1,16 +1,6 @@
 # gecko
 
-gecko is a configuration server used for fetching inserting user specified configurations that are set during etl jobs and read from the frontend.
-
-## helm cluster setup
-
-Helm setup should be much simpler since env vars are defined.
-
-```
-./init_cluster_pg.sh
-go build -o bin/gecko && ./bin/gecko
-go test -v ./...
-```
+gecko is a configuration server used for fetching inserting user specified configurations that are set during etl jobs or frontend actions.
 
 ## local setup
 
@@ -22,3 +12,7 @@ go build -o bin/gecko
 ./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:5432/testdb?sslmode=disable" -port 8080
 go test -v ./...
 ```
+
+## helm cluster setup
+
+See helm charts for cluster setup.

@@ -79,6 +79,33 @@ func TestHandleConfigPUTInvalidJson(t *testing.T) {
 	assert.Equal(t, expectedErrorResponse, errData)
 }
 
+func TestHandleConfigPUTInvalidObject(t *testing.T) {
+	marshalledJSON, err := json.Marshal(map[string]any{"foo": "bar"})
+	assert.NoError(t, err)
+	resp, err := http.DefaultClient.Do(makeRequest("PUT", "http://localhost:8080/config/123", marshalledJSON))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	defer resp.Body.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = buf.ReadFrom(resp.Body)
+	assert.NoError(t, err)
+
+	var errData map[string]any
+	err = json.Unmarshal(buf.Bytes(), &errData)
+	assert.NoError(t, err)
+
+	t.Log("BYTES: ", string(buf.Bytes()))
+	expectedErrorResponse := map[string]any{
+		"error": map[string]any{
+			"code":    float64(400),
+			"message": "body data unmarshal failed: json: cannot unmarshal object into Go value of type []config.ConfigItem",
+		},
+	}
+	assert.Equal(t, expectedErrorResponse, errData)
+}
+
 func TestHandleConfigGET(t *testing.T) {
 	var configs []config.ConfigItem
 	err := json.Unmarshal([]byte(fixtures.TestConfig), &configs)
