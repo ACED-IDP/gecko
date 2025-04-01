@@ -58,20 +58,16 @@ func (server *Server) Init() (*Server, error) {
 	if server.logger == nil {
 		return nil, errors.New("gecko server initialized without logger")
 	}
-	server.logger.logger.Printf("DB: %#v, JWTApp: %#v, Logger: %#v", server.db, server.jwtApp, server.logger)
+	server.logger.Info("DB: %#v, JWTApp: %#v, Logger: %#v", server.db, server.jwtApp, server.logger)
 	return server, nil
 }
 
 func (server *Server) MakeRouter() *iris.Application {
 	router := iris.New()
 	if router == nil {
-		log.Fatal("Failed to initialize router")
+		server.logger.Error("Failed to initialize router")
 	}
 	router.Use(recoveryMiddleware)
-	router.Get("/", func(ctx iris.Context) {
-		server.logger.logger.Println("Root handler called")
-		ctx.JSON(iris.Map{"message": "Hello, World!"})
-	})
 	router.OnErrorCode(iris.StatusNotFound, handleNotFound)
 	router.Get("/health", server.handleHealth)
 	router.Get("/config/{configId}", server.handleConfigGET)
@@ -82,7 +78,7 @@ func (server *Server) MakeRouter() *iris.Application {
 	router.UseRouter(func(ctx iris.Context) {
 		req := ctx.Request()
 		if req == nil || req.URL == nil {
-			log.Println("WARNING: Request or URL is nil")
+			server.logger.Warning("Request or URL is nil")
 			ctx.StatusCode(http.StatusInternalServerError)
 			ctx.WriteString("Internal Server Error")
 			return
@@ -90,9 +86,10 @@ func (server *Server) MakeRouter() *iris.Application {
 		req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 		ctx.Next()
 	})
+
 	// Build the router to ensure it's ready for net/http
 	if err := router.Build(); err != nil {
-		log.Fatalf("Failed to build Iris router: %v", err)
+		server.logger.Error("Failed to build Iris router: %v", err)
 	}
 	return router
 }
@@ -125,7 +122,7 @@ func (server *Server) handleConfigGET(ctx iris.Context) {
 		_ = errResponse.write(ctx)
 		return
 	}
-	server.logger.logger.Println(doc)
+	server.logger.Info("%#v", doc)
 	_ = jsonResponseFrom(doc, http.StatusOK).write(ctx)
 }
 
@@ -148,7 +145,7 @@ func (server *Server) handleConfigDELETE(ctx iris.Context) {
 	}
 
 	okmsg := map[string]any{"code": 200, "message": fmt.Sprintf("DELETED: %s", configId)}
-	server.logger.logger.Println(okmsg)
+	server.logger.Info("%#v", okmsg)
 	_ = jsonResponseFrom(okmsg, http.StatusOK).write(ctx)
 }
 
@@ -157,23 +154,30 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 	data := []config.ConfigItem{}
 	body, err := ctx.GetBody()
 	if err != nil {
-		msg := fmt.Sprintf("client query failed: %s", err.Error())
+		msg := fmt.Sprintf("GetBody() failed: %s", err.Error())
 		errResponse := newErrorResponse(msg, 500, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
-
+	}
+	if !json.Valid(body) {
+		msg := "Invalid JSON format"
+		errResponse := newErrorResponse(msg, 400, nil)
+		errResponse.log.write(server.logger)
+		_ = errResponse.write(ctx)
+		return
 	}
 	errResponse := unmarshal(body, &data)
 	if errResponse != nil {
-		fmt.Printf("HELLO DATA: ERR: %#v\n", errResponse)
+		msg := fmt.Sprintf("body data unmarshal failed: %s", errResponse.err)
+		errResponse := newErrorResponse(msg, 400, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
 		return
 	}
 	err = configPUT(server.db, configId, data)
 	if err != nil {
-		msg := fmt.Sprintf("client query failed: %s", err.Error())
+		msg := fmt.Sprintf("configPut failed: %s", err.Error())
 		errResponse := newErrorResponse(msg, 500, nil)
 		errResponse.log.write(server.logger)
 		_ = errResponse.write(ctx)
@@ -181,20 +185,20 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 	}
 
 	okmsg := map[string]any{"code": 200, "message": fmt.Sprintf("ACCEPTED: %s", configId)}
-	server.logger.logger.Println(okmsg)
+	server.logger.Info("%#v", okmsg)
 	_ = jsonResponseFrom(okmsg, http.StatusOK).write(ctx)
 }
 
 func (server *Server) handleHealth(ctx iris.Context) {
-	server.logger.logger.Println("Entering handleHealth")
+	server.logger.Info("Entering handleHealth")
 	err := server.db.Ping()
 	if err != nil {
-		server.logger.logger.Printf("Database ping failed: %v", err)
+		server.logger.Error("Database ping failed: %v", err)
 		response := newErrorResponse("database unavailable", 500, nil)
 		_ = response.write(ctx)
 		return
 	}
-	server.logger.logger.Println("Health check passed")
+	server.logger.Info("Health check passed")
 	_ = jsonResponseFrom("Healthy", http.StatusOK).write(ctx)
 }
 
@@ -220,7 +224,6 @@ func unmarshal(body []byte, x any) *ErrorResponse {
 	if len(body) == 0 {
 		return newErrorResponse("empty request body", http.StatusBadRequest, nil)
 	}
-
 	err := json.Unmarshal(body, x)
 	if err != nil {
 		structType := reflect.TypeOf(x)

@@ -14,6 +14,8 @@ import (
 )
 
 func main() {
+	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
+
 	var jwkEndpointEnv string = os.Getenv("JWKS_ENDPOINT")
 
 	var port *uint = flag.Uint("port", 80, "port on which to expose the API")
@@ -24,7 +26,7 @@ func main() {
 	)
 
 	if *jwkEndpoint == "" {
-		print("WARNING: no $JWKS_ENDPOINT or --jwks specified; endpoints requiring JWT validation will error\n")
+		logger.Println("WARNING: no $JWKS_ENDPOINT or --jwks specified; endpoints requiring JWT validation will error")
 	}
 
 	var dbUrl *string = flag.String(
@@ -39,21 +41,19 @@ func main() {
 
 	db, err := sqlx.Open("postgres", *dbUrl)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Fatalf("Failed to connect to database: %v", err)
 		panic(err)
 	}
 
 	err = db.Ping()
 	if err != nil {
-		log.Fatalf("DB ping failed: %v", err)
+		logger.Fatalf("DB ping failed: %v", err)
 		panic(err)
 	}
 	defer db.Close()
 
-	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	jwtApp := authutils.NewJWTApplication(*jwkEndpoint)
-	log.Printf("JWT APP: %#v\n", jwtApp.Keys)
-	log.Printf("LOGGER: %#v\n", logger)
+	logger.Printf("JWT App Init: %#v\n", jwtApp.Keys)
 
 	geckoServer, err := gecko.NewServer().
 		WithLogger(logger).

@@ -1,0 +1,56 @@
+name: Go Tests
+
+on: [ pull_request ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22.6'
+
+    - name: Start PostgreSQL
+      run: |
+        docker rm -f gecko-postgres-test > /dev/null 2>&1 || true
+
+        docker run -d \
+          --name gecko-postgres-test \
+          -p 8081:5432 \
+          -e POSTGRES_PASSWORD=your_strong_password \
+          -e POSTGRES_USER=postgres \
+          postgres:10.4 > /dev/null
+
+        # Wait for PostgreSQL to be ready
+        for i in {1..30}; do
+          if docker exec gecko-postgres-test pg_isready -U postgres -h localhost; then
+            break
+          fi
+          sleep 1
+        done
+
+    # Create database and setup schema
+    - name: Setup Database
+      run: |
+        # Create the test database
+        docker exec gecko-postgres-test psql -U postgres -c "CREATE DATABASE testdb;"
+
+        # Create the table
+        docker exec gecko-postgres-test psql -U postgres -d testdb -c "
+          CREATE TABLE IF NOT EXISTS documents (
+            name VARCHAR(255) PRIMARY KEY,
+            content JSONB
+          );"
+      env:
+        PGPASSWORD: your_strong_password
+
+    - name: Start Application
+      run: |
+        make
+        ./bin/gecko -db "postgresql://postgres:your_strong_password@localhost:8081/testdb?sslmode=disable" -port 8080 &
+        go test -v ./...
