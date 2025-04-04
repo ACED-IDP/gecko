@@ -72,6 +72,7 @@ func (server *Server) MakeRouter() *iris.Application {
 	router.Get("/health", server.handleHealth)
 	router.Get("/config/{configId}", server.handleConfigGET)
 	router.Put("/config/{configId}", server.handleConfigPUT)
+	router.Get("/config/list", server.handleConfigListGET)
 	router.Delete("/config/{configId}", server.handleConfigDELETE)
 
 	// Optionally keep UseRouter if needed, with safety checks
@@ -103,6 +104,24 @@ func recoveryMiddleware(ctx iris.Context) {
 		}
 	}()
 	ctx.Next()
+}
+
+func (server *Server) handleConfigListGET(ctx iris.Context) {
+	configList, err := configList(server.db)
+	if configList == nil && err == nil {
+		errResponse := newErrorResponse("No configs found", 404, nil)
+		errResponse.log.write(server.logger)
+		_ = errResponse.write(ctx)
+		return
+	}
+	if err != nil {
+		errResponse := newErrorResponse(fmt.Sprintf("%s", err), 500, nil)
+		errResponse.log.write(server.logger)
+		_ = errResponse.write(ctx)
+		return
+	}
+	server.logger.Info("Configs: %#v", configList)
+	_ = jsonResponseFrom(configList, http.StatusOK).write(ctx)
 }
 
 func (server *Server) handleConfigGET(ctx iris.Context) {
@@ -190,7 +209,6 @@ func (server *Server) handleConfigPUT(ctx iris.Context) {
 }
 
 func (server *Server) handleHealth(ctx iris.Context) {
-	server.logger.Info("Entering handleHealth")
 	err := server.db.Ping()
 	if err != nil {
 		server.logger.Error("Database ping failed: %v", err)
