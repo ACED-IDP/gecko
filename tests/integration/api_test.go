@@ -161,3 +161,30 @@ func TestHandleConfigDeleteOK(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, 404)
 }
+
+func TestHandleListConfigsOK(t *testing.T) {
+	var configs []config.ConfigItem
+	err := json.Unmarshal([]byte(fixtures.TestConfig), &configs)
+	payloadBytes, err := json.Marshal(configs)
+	assert.NoError(t, err)
+	_, err = http.DefaultClient.Do(makeRequest("PUT", "http://localhost:8080/config/testdelete", payloadBytes))
+	assert.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(makeRequest("GET", "http://localhost:8080/config/list", nil))
+	assert.NoError(t, err)
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	resp.Body.Close()
+	var outdata []string
+	json.Unmarshal(buf.Bytes(), &outdata)
+
+	passtest := false
+	for _, conf := range outdata {
+		if conf == "testdelete" {
+			passtest = true
+		}
+	}
+	t.Log("Configs: ", outdata)
+	assert.True(t, passtest)
+}

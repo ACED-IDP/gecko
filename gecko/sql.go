@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/ACED-IDP/gecko/gecko/config"
 	"github.com/jmoiron/sqlx"
@@ -13,6 +14,18 @@ type Document struct {
 	ID      int             `db:"id"`
 	Name    string          `db:"name"`
 	Content json.RawMessage `db:"content"` // Store JSON as raw bytes
+}
+
+func configList(db *sqlx.DB) ([]string, error) {
+	var names []string
+	err := db.Select(&names, "SELECT name FROM documents")
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []string{}, nil
+		}
+		return nil, fmt.Errorf("error fetching config names: %w", err)
+	}
+	return names, nil
 }
 
 func configGET(db *sqlx.DB, name string) (map[string]any, error) {
